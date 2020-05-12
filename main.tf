@@ -102,6 +102,7 @@ resource "aws_s3_bucket" "this" {
     Name        = "${var.aws_root_name}-s3-terraform-${var.aws_region_name}"
     Environment = var.aws_environment_name
     Source      = var.aws_source_name
+    Answer      = "42"
     #tfsec:ignore:AWS002
   }
 }
