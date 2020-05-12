@@ -26,11 +26,7 @@ This repository contains two GitHub Workflow files:
 
 * Terraform CLI performs an `Init` and `Plan` based on the pull request's configuration.
 
-* GitHub Actions Bot adds a comment to the pull request with the results.
-
-  * Example: [Pull Request 1](https://github.com/WahlNetwork/github-action-terraform/pull/1)
-
-  * Example: [Pull Request 2](https://github.com/WahlNetwork/github-action-terraform/pull/2)
+* GitHub Actions Bot adds a comment to the pull request with the results. Example: [Pull Request 1](https://github.com/WahlNetwork/github-action-terraform/pull/1)
 
 You can view pervious Terraform Plan workflows [here](https://github.com/WahlNetwork/github-action-terraform/actions?query=workflow%3A%22Terraform+Plan%22).
 
