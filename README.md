@@ -1,6 +1,6 @@
 # Continuous Integration with GitHub Actions and HashiCorp Terraform
 
-_[Based on this blog post](https://wahlnetwork.com/2020/04/29/terraform-plans-modules-and-remote-state/)_
+_[Based on this blog post](https://wahlnetwork.com/)_
 
 ## Overview
 
@@ -28,11 +28,11 @@ This repository contains two GitHub Workflow files:
 
 * GitHub Actions Bot adds a comment to the pull request with the results.
 
-  * Example: [Pull Request 1](/pull/1)
+  * Example: [Pull Request 1](https://github.com/WahlNetwork/github-action-terraform/pull/1)
 
-  * Example: [Pull Request 2](/pull/2)
+  * Example: [Pull Request 2](https://github.com/WahlNetwork/github-action-terraform/pull/2)
 
-You can view pervious Terraform Plan workflows [here](/actions?query=workflow%3A%22Terraform+Plan%22).
+You can view pervious Terraform Plan workflows [here](https://github.com/WahlNetwork/github-action-terraform/actions?query=workflow%3A%22Terraform+Plan%22).
 
 ## Terraform Apply
 
@@ -42,7 +42,7 @@ You can view pervious Terraform Plan workflows [here](/actions?query=workflow%3A
 
 * Terraform CLI performs an `Init` and `Apply` based on the new push configuration.
 
-You can view pervious Terraform Apply workflows [here](/actions?query=workflow%3A%22Terraform+Apply%22).
+You can view pervious Terraform Apply workflows [here](https://github.com/WahlNetwork/github-action-terraform/actions?query=workflow%3A%22Terraform+Apply%22).
 
 ## Credentials
 
