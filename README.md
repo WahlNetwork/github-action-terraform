@@ -1,6 +1,6 @@
 # Continuous Integration with GitHub Actions and HashiCorp Terraform
 
-_[Based on this blog post](https://wahlnetwork.com/)_
+_[Based on this blog post](https://wahlnetwork.com/2020/05/12/continuous-integration-with-github-actions-and-terraform/)_
 
 ## Overview
 
