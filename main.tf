@@ -118,8 +118,8 @@ resource "aws_s3_bucket_public_access_block" "this" {
 
 terraform {
   backend "s3" {
-    bucket = "demo-s3-terraform-use1"
-    key    = "github-actions-example/terraform.tfstate"
-    region = "us-east-1"
+    bucket = "project-x-s3-terraform-state"
+    key    = "github-actions-example/"#{var.aws_environment_name}"/terraform.tfstate"
+    region = "ap-south-1"
   }
 }
