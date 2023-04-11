@@ -30,32 +30,6 @@ resource "aws_kms_key" "this" {
             "Resource": "*"
         },
         {
-            "Sid": "Allow access for Key Administrators",
-            "Effect": "Allow",
-            "Principal": {
-                "AWS": [
-                  "arn:aws:iam::${data.aws_caller_identity.current.account_id}:user/${var.aws_kms_admin}"
-                ]
-            },
-            "Action": [
-                "kms:Create*",
-                "kms:Describe*",
-                "kms:Enable*",
-                "kms:List*",
-                "kms:Put*",
-                "kms:Update*",
-                "kms:Revoke*",
-                "kms:Disable*",
-                "kms:Get*",
-                "kms:Delete*",
-                "kms:TagResource",
-                "kms:UntagResource",
-                "kms:ScheduleKeyDeletion",
-                "kms:CancelKeyDeletion"
-            ],
-            "Resource": "*"
-        },
-        {
             "Sid": "Allow use of the key",
             "Effect": "Allow",
             "Principal": {
