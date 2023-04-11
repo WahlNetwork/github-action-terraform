@@ -33,6 +33,7 @@ jobs:
     secrets: inherit
 
   plan:
+    needs: [scanning]
     uses: ./.github/workflows/plan.yml
     with:
       # need to specify working-directory as that's where the terraform files live in the source code
