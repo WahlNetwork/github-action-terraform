@@ -1,0 +1,119 @@
+name: "Terraform Destroy"
+
+on:
+  workflow_call:
+    inputs:
+      # working-directory is added to specify "terraform" directory in project source code as that's where the terraform files live.
+      working-directory:
+        required: false
+        type: string
+        default: './terraform'
+      # apply-branch refers to the branch where 'terraform apply' should execute.  It defaults to the "main" branch, but calling workflow has the option to change it to a different branch to execute 'terraform apply'.
+      apply-branch:
+        required: false
+        type: string
+        default: 'main'
+      environment:
+        required: false
+        type: string
+        default: 'dev'
+      bucket_name:
+        description: 'cleanup bucketname'
+        required: false
+        type: string
+        default: 'jingood2-s3-tfstates'
+      key:
+        description: 'cleanup target component name'
+        required: false
+        type: string
+        default: 'vpc'
+        
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  terraform:
+    name:   Deploy terraform
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+
+    # important to specify the environment here so workflow knows where to deploy your artifact to.
+    # default environment to "dev" if it is not passed in through workflow_dispatch manual trigger
+    environment: ${{ inputs.environment || 'dev' }}
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@d0651293c4a5a52e711f25b41b05b2212f385d28
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@67fbcbb121271f7775d2e7715933280b06314838
+        with:
+          role-to-assume: ${{ secrets.DEV_DEPLOY_ROLE }}
+          #aws-access-key-id: ${{secrets.AWS_ACCESS_KEY_ID}}
+          #aws-secret-access-key: ${{secrets.AWS_SECRET_ACCESS_KEY}}
+          aws-region: ${{ secrets.AWS_REGION || 'us-east-1' }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@7b3bcd8d76f3cbaec0a3564e53de7c9adf00f0a7
+
+      - name: Terraform Init - ${{ inputs.environment }}
+        id: init
+        run: |
+          # passes a NPM_TOKEN which has access to private repo as client app doesn't pass such credential in when calling tf reusable module.
+          # credit: https://github.com/hashicorp/setup-terraform/issues/33
+          git config --global url."https://oauth2:${{ secrets.NPM_TOKEN }}@github.com".insteadOf https://github.com
+          rm -rf .terraform
+          terraform init -backend-config="key=${{inputs.environment}}}" -backend-config='./.env/${{ inputs.environment || 'dev' }}/backend.tfvars' -upgrade=true -no-color -input=false
+          terraform workspace select "${{inputs.environment}}" || terraform workspace new "${{inputs.environment}}"
+      
+      - name: Terraform Destroy Plan - ${{ inputs.environment }}
+        id: plan
+        run: |
+          #terraform plan -destroy -target=module.eks_blueprints_kubernetes_addons -var-file=.env/${{ inputs.environment || 'dev' }}/terraform.tfvars -out addons.tfplan
+          terraform plan -destroy -target=module.eks_blueprints -var-file=.env/${{ inputs.environment || 'dev' }}/terraform.tfvars -out blueprints.tfplan
+          terraform plan -destroy -var-file=.env/${{ inputs.environment || 'dev' }}/terraform.tfvars -out destroy.tfplan
+      
+      - name: Slack Notification
+        uses: rtCamp/action-slack-notify@v2
+        env:
+          SLACK_CHANNEL: general
+          SLACK_COLOR: ${{ steps.init.outputs.exitcode }} # or a specific color like 'good' or '#ff00ff'
+          SLACK_ICON: https://github.com/rtCamp.png?size=48
+          SLACK_MESSAGE: ${{ steps.plan.outputs.stdout }} | sed '$!s/$/\\n/' | tr -d '\n' 
+          SLACK_TITLE: Post Title
+          SLACK_USERNAME: rtCamp
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
+      
+      #- name: Send custom JSON data to Slack workflow
+      #  id: slack
+      #  uses: slackapi/slack-github-action@v1.23.0
+      #  with:
+      #    payload: "${{steps.plan.outputs.stdout}}"
+      #  env:
+      #    SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+      
+      #- name: Terraform Apply - ${{ inputs.environment }}
+      #  if: github.ref == 'refs/heads/${{ inputs.apply-branch }}' && github.event_name == 'push'
+      #  id: apply
+      #  run: |
+      #    #terraform apply -auto-approve -input=false -var-file=.env/${{ inputs.environment || 'dev' }}/terraform.tfvars
+      #    terraform apply -auto-approve tfplan
+      
+      - name: Terraform destroy
+        # If you want to use this workflow to run terraform destroy, create a feature branch "destroy", trigger this workflow from that branch to destroy.
+        if: github.ref == 'refs/heads/destroy'
+        id: destroy
+        run: |
+          #terraform apply addons.tfplan
+          terraform apply blueprints.tfplan
+          terraform apply destroy.tfplan
+      
+      
+      
+      - name: Delete plan file
+        if: steps.destroy.outcome == 'success'
+        run: aws s3 rm s3://${{inputs.bucket_name}}/env:/${{inputs.environment}}/${{inputs.key}}/terraform.tfstate

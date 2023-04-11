@@ -1,0 +1,73 @@
+name: "Terraform Pull Request Workflow"
+
+on:
+  pull_request:
+    branches: 
+      - main
+
+#permissions:  # added using https://github.com/step-security/secure-workflows
+#  contents: read
+permissions: write-all
+
+jobs:
+
+  #infracost:
+  #  permissions:
+  #    contents: write
+  #    pull-requests: write
+  #  uses: wenqiglantz/reusable-workflows-modules/.github/workflows/terraform-infracost.yml@main
+  #  with:
+  #    # need to specify working-directory as that's where the terraform files live in the source code
+  #    working-directory: ./terraform
+  #    terraform-var-file: ./.env/${{ inputs.env || 'dev' }}/terraform.tfvars
+  #    usage-file: ./.env/${{ inputs.env || 'dev' }}/infracost-usage.yml
+  #  secrets: inherit
+  scanning:
+    #needs: infracost
+    #uses: wenqiglantz/reusable-workflows-modules/.github/workflows/terraform.yml@main
+    uses: ./.github/workflows/reusable/scan.yml
+    with:
+      # need to specify working-directory as that's where the terraform files live in the source code
+      working-directory: ./terraform
+      environment: ${{ inputs.environment }}
+    secrets: inherit
+
+  plan:
+    uses: ./.github/workflows/reusable/plan.yml
+    with:
+      # need to specify working-directory as that's where the terraform files live in the source code
+      working-directory: ./terraform
+      environment: ${{ inputs.environment }}
+      targets: "['dev', 'prod']"
+    secrets: inherit
+
+
+  deployment-dev:
+    needs: [terraform-plan]
+    #needs: infracost
+    permissions:
+      id-token: write  # need this for OIDC
+      contents: read   # This is required for actions/checkout
+    #uses: wenqiglantz/reusable-workflows-modules/.github/workflows/terraform.yml@main
+    uses: ./.github/workflows/deployment.yml
+    with:
+      # need to specify working-directory as that's where the terraform files live in the source code
+      working-directory: ./terraform
+      #environment: ${{ inputs.environment }}
+      environment: 'dev'
+    secrets: inherit
+  
+  #deployment-prod:
+  #  needs: [deployment-dev]
+  #  #needs: infracost
+  #  permissions:
+  #    id-token: write  # need this for OIDC
+  #    contents: read   # This is required for actions/checkout
+  #  #uses: wenqiglantz/reusable-workflows-modules/.github/workflows/terraform.yml@main
+  #  uses: ./.github/workflows/deployment.yml
+  #  with:
+  #    # need to specify working-directory as that's where the terraform files live in the source code
+  #    working-directory: ./terraform
+  #    environment: 'prod'
+  #    #environment: ${{ inputs.environment }}
+  #  secrets: inherit

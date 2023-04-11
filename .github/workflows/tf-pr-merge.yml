@@ -1,0 +1,41 @@
+name: "Terraform PR Merge Workflow"
+on:
+  push:
+    branches:
+      - main
+
+
+#permissions:  # added using https://github.com/step-security/secure-workflows
+#  contents: read
+permissions: write-all
+
+jobs:
+
+  apply-dev:
+    #needs: infracost
+    permissions:
+      id-token: write  # need this for OIDC
+      contents: read   # This is required for actions/checkout
+    #uses: wenqiglantz/reusable-workflows-modules/.github/workflows/terraform.yml@main
+    uses: ./.github/workflows/reusable/apply.yml
+    with:
+      # need to specify working-directory as that's where the terraform files live in the source code
+      working-directory: ./terraform
+      #environment: ${{ inputs.environment }}
+      environment: 'dev'
+    secrets: inherit
+  
+  apply-prod:
+    needs: [deployment-dev]
+    #needs: infracost
+    permissions:
+      id-token: write  # need this for OIDC
+      contents: read   # This is required for actions/checkout
+    #uses: wenqiglantz/reusable-workflows-modules/.github/workflows/terraform.yml@main
+    uses: ./.github/workflows/reusable/apply.yml
+    with:
+      # need to specify working-directory as that's where the terraform files live in the source code
+      working-directory: ./terraform
+      environment: 'prod'
+      #environment: ${{ inputs.environment }}
+    secrets: inherit

@@ -1,0 +1,89 @@
+name: "Terraform Deployment"
+
+on:
+  workflow_call:
+    inputs:
+      # working-directory is added to specify "terraform" directory in project source code as that's where the terraform files live.
+      working-directory:
+        required: false
+        type: string
+        default: './terraform'
+      # apply-branch refers to the branch where 'terraform apply' should execute.  It defaults to the "main" branch, but calling workflow has the option to change it to a different branch to execute 'terraform apply'.
+      apply-branch:
+        required: false
+        type: string
+        default: 'main'
+      environment:
+        required: false
+        type: string
+        default: 'dev'
+        
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  terraform:
+    name:   Deploy terraform
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+
+    # important to specify the environment here so workflow knows where to deploy your artifact to.
+    # default environment to "dev" if it is not passed in through workflow_dispatch manual trigger
+    environment: ${{ inputs.environment || 'dev' }}
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@d0651293c4a5a52e711f25b41b05b2212f385d28
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@67fbcbb121271f7775d2e7715933280b06314838
+        with:
+          role-to-assume: ${{ secrets.DEV_DEPLOY_ROLE }}
+          #aws-access-key-id: ${{secrets.AWS_ACCESS_KEY_ID}}
+          #aws-secret-access-key: ${{secrets.AWS_SECRET_ACCESS_KEY}}
+          aws-region: ${{ secrets.AWS_REGION || 'us-east-1' }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@7b3bcd8d76f3cbaec0a3564e53de7c9adf00f0a7
+
+      - name: Terraform Init
+        id: init
+        run: |
+          # passes a NPM_TOKEN which has access to private repo as client app doesn't pass such credential in when calling tf reusable module.
+          # credit: https://github.com/hashicorp/setup-terraform/issues/33
+          git config --global url."https://oauth2:${{ secrets.NPM_TOKEN }}@github.com".insteadOf https://github.com
+          rm -rf .terraform
+          terraform init -backend-config="key=${{inputs.environment}}" -backend-config='./.env/${{ inputs.environment || 'dev' }}/backend.tfvars' -upgrade=true -no-color -input=false
+          terraform workspace select "${{inputs.environment}}" || terraform workspace new "${{inputs.environment}}"
+      
+      - name: Terraform Plan - ${{ inputs.environment }}
+        id: plan
+        run: |
+          terraform plan -no-color -input=false -var-file=.env/${{ inputs.environment || 'dev' }}/terraform.tfvars -out tfplan
+      
+      #- name: send slack notification
+      #  # If you want to use this workflow to run terraform destroy, create a feature branch "destroy", trigger this workflow from that branch to destroy.
+      #  id: slack
+      #  run: |
+      #     terraform show -no-color tfplan > slack_response.txt
+      #     sed -i 's/\r$//g' slack_response.txt
+      #     SLACK_MESSAGE=$(cat slack_response.txt | sed '$!s/$/\\n/' | tr -d '\n')
+      #     curl -X POST -H 'Content-type: application/json' --data "{'text':'$SLACK_MESSAGE'}" ${{ secrets.SLACK_WEBHOOK_URL }}
+      
+      - name: Terraform Apply - ${{ inputs.environment }}
+        if: github.ref == 'refs/heads/${{ inputs.apply-branch }}' && github.event_name == 'push'
+        id: apply
+        run: |
+          terraform apply -auto-approve tfplan
+      
+      - name: send slack notification
+        # If you want to use this workflow to run terraform destroy, create a feature branch "destroy", trigger this workflow from that branch to destroy.
+        id: slack_output
+        run: |
+           terraform output -no-color -json > slack_response.json
+           SLACK_MESSAGE=$(cat slack_response.json | sed '$!s/$/\\n/' | tr -d '\n' )
+           curl -X POST -H 'Content-type: application/json' --data "{'text':'$SLACK_MESSAGE'}" ${{ secrets.SLACK_WEBHOOK_URL }}

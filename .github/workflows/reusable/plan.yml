@@ -1,0 +1,90 @@
+name: "Terraform Scanning"
+
+on:
+  workflow_call:
+    inputs:
+      # working-diretory is added to specify "terraform" directory in project source code as that's where the terraform files live.
+      working-directory:
+        required: false
+        type: string
+        default: './terraform'
+      # apply-brach refers to the branch where 'terraform apply' should execute. It defaults to the 'main' branch, but calling workflow has the option to change it to a deferrent branch to execute 'terraform apply'
+      environment:
+        required: false
+        type: string
+        default: 'dev'
+      targets:
+        required: false
+        type: string
+        default: "['dev','prod']"
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  terraform:
+    name: terraform-plan
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: './terraform'
+    strategy:
+      fail-fast: false
+      matrix:
+        path: ${{ fromJson(inputs.targets) }}
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      EXPAND_SUMMARY_DETAILS: true
+      TF_IN_AUTOMATION: true
+      TF_WORKSPACE: ${{ matrix['path'] }}
+
+    permissions: write-all
+
+    steps:
+    - name: Check out code
+      uses: actions/checkout@v3
+
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@7b3bcd8d76f3cbaec0a3564e53de7c9adf00f0a7
+      with:
+        terraform_wrapper: true
+
+    - name: Configure AWS Credentials
+      uses: aws-actions/configure-aws-credentials@v1-node16
+      with:
+        role-to-assume: ${{ secrets.DEV_DEPLOY_ROLE }}
+        #aws-access-key-id: ${{secrets.AWS_ACCESS_KEY_ID}}
+        #aws-secret-access-key: ${{secrets.AWS_SECRET_ACCESS_KEY}}
+        aws-region: ${{ secrets.AWS_REGION || 'us-east-1' }}
+
+    - name: Terraform Init - ${{ matrix['path'] }}
+      id: init
+      run: |
+        unset TF_WORKSPACE
+        rm -rf .terraform
+        terraform init -backend-config='./.env/${{ matrix['path'] || 'dev' }}/backend.tfvars' -upgrade=true -no-color -input=false
+        terraform workspace select "${{matrix['path']}}" || terraform workspace new "${{matrix['path']}}"
+
+    - name: Post Init - ${{ matrix['path'] }}
+      if: always() && github.ref != 'refs/heads/main' && (steps.init.outcome == 'success' || steps.init.outcome == 'failure')
+      uses: robburger/terraform-pr-commenter@v1
+      with:
+        commenter_type: init
+        commenter_input: ${{ format('{0}{1}', steps.init.outputs.stdout, steps.init.outputs.stderr) }}
+        commenter_exitcode: ${{ steps.init.outputs.exitcode }}
+
+
+    - name: Terraform Plan - ${{ matrix['path'] }}
+      id: plan
+      run: |
+        terraform plan -no-color -input=false -var-file=.env/${{ matrix['path'] || 'dev' }}/terraform.tfvars -out tfplan
+
+    - name: Post Plan
+      uses: robburger/terraform-pr-commenter@v1
+      env:
+        EXPAND_SUMMARY_DETAILS: true # Override global environment variable; expand details just for this step
+      with:
+        commenter_type: plan
+        commenter_input: ${{ format('{0}{1}', steps.plan.outputs.stdout, steps.plan.outputs.stderr) }}
+        commenter_exitcode: ${{ steps.plan.outputs.exitcode }}
